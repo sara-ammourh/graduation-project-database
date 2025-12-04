@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 from sqlmodel import select, Session
 from db.config import get_session
 from db.models import User
@@ -39,3 +39,17 @@ def get_user_by_id(
     user_id: int, session: Session = next(get_session())
 ) -> Optional[User]:
     return session.exec(select(User).where(User.user_id == user_id)).first()
+
+def get_all_users(session: Session = next(get_session())) -> List[User]:
+    return session.exec(select(User)).all()
+
+def update_user(user_id: int, data: dict, session: Session = next(get_session())) -> Optional[User]:
+    user = session.exec(select(User).where(User.user_id == user_id)).first()
+    if user:
+        for key, value in data.items():
+            setattr(user, key, value)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+    return None
