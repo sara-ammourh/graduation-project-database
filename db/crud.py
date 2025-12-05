@@ -1,8 +1,8 @@
 from datetime import date
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from sqlmodel import select, Session
 from db.config import get_session
-from db.models import User, UserAuth, UserPost, UsersSavedVisuals
+from db.models import User, UserAuth, UserPost, UsersSavedVisuals, LabelCorrection
 
 
 # User CRUD
@@ -128,17 +128,12 @@ def create_user_post(
     return new_user_post
 
 
-def remove_user_post(id: int, session: Session = next(get_session())) -> bool:
-    user_post = session.exec(select(UserPost).where(UserPost.id == id)).first()
-    if user_post:
-        session.delete(user_post)
-        session.commit()
-        return True
-    return False
-
-
 def get_user_post_by_id(id: int, session: Session = next(get_session())) -> Optional[UserPost]:
     return session.exec(select(UserPost).where(UserPost.id == id)).first()
+
+
+def get_user_posts_by_user_id(user_id: int, session: Session = next(get_session())) -> List[UserPost]:
+    return session.exec(select(UserPost).where(UserPost.user_id == user_id)).all()
 
 
 def get_all_user_posts(session: Session = next(get_session())) -> List[UserPost]:
@@ -184,7 +179,7 @@ def get_all_saved_visuals(session: Session = next(get_session())) -> List[UsersS
     return session.exec(select(UsersSavedVisuals)).all()
 
 
-def get_saved_visual_by_user_id(
+def get_saved_visuals_by_user_id(
         user_id: int, session: Session = next(get_session())
 ) -> List[UsersSavedVisuals]:
     return session.exec(select(UsersSavedVisuals.user_id == user_id)).all()
@@ -206,11 +201,51 @@ def update_saved_visual(id: int, data: dict, session: Session = next(get_session
 
 # LabelCorrection CRUD
 
-# def create_label_correction(
-#         image_path: str,
-#         data_structure_type: str,
-#         wrong_label: Optional[str] = None,
-#         correct_label: str,
-#         user_id: int,
-#         session: Session = next(get_session())
-# ) ->
+def create_label_correction(
+        image_path: str,
+        data_structure_type: str,
+        correct_label: Dict[str, Any],
+        user_id: int,
+        wrong_label: Optional[Dict[str, Any]] = None,
+        session: Session = next(get_session())
+) -> LabelCorrection:
+    new_label_correction = LabelCorrection(
+        image_path=image_path,
+        data_structure_type=data_structure_type,
+        wrong_label=wrong_label,
+        correct_label=correct_label,
+        created_at=date.today(),
+        user_id=user_id,
+        session=session,
+    )
+
+    session.add(new_label_correction)
+    session.commit()
+    session.refresh(new_label_correction)
+    return new_label_correction
+
+
+def remove_label_correction(image_path: str, session: Session = next(get_session())) -> bool:
+    label_correction = session.exec(
+        select(LabelCorrection).where(LabelCorrection.image_path == image_path)).first()
+    if label_correction:
+        session.delete(label_correction)
+        session.commit()
+        return True
+    return False
+
+
+def get_label_correction_by_path(
+    image_path: str, session: Session = next(get_session())
+) -> Optional[LabelCorrection]:
+    return session.exec(
+        select(LabelCorrection).where(LabelCorrection.image_path == image_path)).first()
+
+
+def get_all_label_corrections(session: Session = next(get_session())) -> List[LabelCorrection]:
+    return session.exec(select(LabelCorrection)).all()
+
+
+def get_label_corrections_by_user_id(
+        user_id:int, session: Session = next(get_session())) -> List[LabelCorrection]:
+    return session.exec(select(LabelCorrection).where(LabelCorrection.user_id == user_id)).all()
