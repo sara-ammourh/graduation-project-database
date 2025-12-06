@@ -63,7 +63,7 @@ def create_user_auth(
         password: str,
         token: str,
         user_id: int,
-        session: Session = next(get_session())
+        session: Session
 ) -> UserAuth:
     new_user_auth = UserAuth(
         user_id=user_id,
@@ -111,7 +111,7 @@ def create_user_post(
         operation_type: str,
         status: str,
         user_id: int,
-        session: Session = next(get_session())
+        session: Session
 ) -> UserPost:
     new_user_post = UserPost(
         operation_type=operation_type,
@@ -126,15 +126,15 @@ def create_user_post(
     return new_user_post
 
 
-def get_user_post_by_id(id: int, session: Session = next(get_session())) -> Optional[UserPost]:
+def get_user_post_by_id(id: int, session: Session) -> Optional[UserPost]:
     return session.exec(select(UserPost).where(UserPost.id == id)).first()
 
 
-def get_user_posts_by_user_id(user_id: int, session: Session = next(get_session())) -> List[UserPost]:
+def get_user_posts_by_user_id(user_id: int, session: Session) -> List[UserPost]:
     return session.exec(select(UserPost).where(UserPost.user_id == user_id)).all()
 
 
-def get_all_user_posts(session: Session = next(get_session())) -> List[UserPost]:
+def get_all_user_posts(session: Session) -> List[UserPost]:
     return session.exec(select(UserPost)).all()
 
 
