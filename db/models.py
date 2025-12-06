@@ -30,7 +30,7 @@ class UsersSavedVisuals(SQLModel, table=True):
     __tablename__ = "users_saved_visuals"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    saved_visual: str = Field(sa_column=Column(JSON))
+    saved_visual: Dict[str, Any] = Field(sa_column=Column(JSON))
     type: str = Field(max_length=30)
     updated_at: date
     user_id: int = Field(foreign_key="users.user_id")

@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session
 from db.config import get_session
 from db import crud
-from db.crud import get_all_users, get_user_post_by_id
 
 router = APIRouter()
 
@@ -91,7 +90,7 @@ def get_all_user_posts(session: Session = Depends(get_session)):
 # UsersSavedVisuals API Route
 
 @router.post("/saved_visual")
-def create_saved_visual(saved_visual: str,
+def create_saved_visual(saved_visual: Dict[str, Any],
                         type: str,
                         user_id: int,
                         session: Session = Depends(get_session)):

@@ -143,7 +143,7 @@ def get_all_user_posts(session: Session) -> List[UserPost]:
 # UsersSavedVisuals CRUD
 
 def create_saved_visual (
-        saved_visual: str,
+        saved_visual: Dict[str, Any],
         type: str,
         user_id: int,
         session: Session
