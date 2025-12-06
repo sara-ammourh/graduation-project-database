@@ -8,11 +8,11 @@ from db.models import User, UserAuth, UserPost, UsersSavedVisuals, LabelCorrecti
 # User CRUD
 
 def create_user(
+    session: Session,
     username: str,
     email: str,
     preferred_theme: str,
     phone_number: Optional[str] = None,
-    session: Session = next(get_session()),  # Use the dependency to get a session
 ) -> User:
     new_user = User(
         username=username,
@@ -28,7 +28,7 @@ def create_user(
     return new_user
 
 
-def remove_user(user_id: int, session: Session = next(get_session())) -> bool:
+def remove_user(user_id: int, session: Session) -> bool:
     user = session.exec(select(User).where(User.user_id == user_id)).first()
     if user:
         session.delete(user)
@@ -37,17 +37,15 @@ def remove_user(user_id: int, session: Session = next(get_session())) -> bool:
     return False
 
 
-def get_user_by_id(
-    user_id: int, session: Session = next(get_session())
-) -> Optional[User]:
+def get_user_by_id(user_id: int, session: Session) -> Optional[User]:
     return session.exec(select(User).where(User.user_id == user_id)).first()
 
 
-def get_all_users(session: Session = next(get_session())) -> List[User]:
+def get_all_users(session: Session) -> List[User]:
     return session.exec(select(User)).all()
 
 
-def update_user(user_id: int, data: dict, session: Session = next(get_session())) -> Optional[User]:
+def update_user(user_id: int, data: dict, session: Session) -> Optional[User]:
     user = session.exec(select(User).where(User.user_id == user_id)).first()
     if user:
         for key, value in data.items():
