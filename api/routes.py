@@ -34,7 +34,7 @@ def get_user(user_id: int, session: Session = Depends(get_session)):
 
 @router.get("/users")
 def get_users(session: Session = Depends(get_session)):
-    return get_all_users(session=session)
+    return crud.get_all_users(session=session)
 
 
 @router.put("/user/{user_id}")
@@ -75,14 +75,52 @@ def create_user_post(operation_type: str,
 
 @router.get("/user_post/{id}")
 def get_user_post_by_id(id: int, session: Session = Depends(get_session)):
-    return get_user_post_by_id(id=id, session=session)
+    return crud.get_user_post_by_id(id=id, session=session)
 
 
-@router.get("/user_posts/{user_id}")
+@router.get("/user_posts/user/{user_id}")
 def get_user_posts_by_user_id(user_id: int, session: Session = Depends(get_session)):
-    return get_user_posts_by_user_id(user_id=user_id, session=session)
+    return crud.get_user_posts_by_user_id(user_id=user_id, session=session)
 
 
 @router.get("/user_posts")
 def get_all_user_posts(session: Session = Depends(get_session)):
-    return get_all_user_posts(session=session)
+    return crud.get_all_user_posts(session=session)
+
+
+# UsersSavedVisuals API Route
+
+@router.post("/saved_visual")
+def create_saved_visual(saved_visual: str,
+                        type: str,
+                        user_id: int,
+                        session: Session = Depends(get_session)):
+    return crud.create_saved_visual(saved_visual=saved_visual,
+                               type=type,
+                               user_id=user_id,
+                               session=session)
+
+
+@router.delete("/saved_visual/{id}")
+def delete_saved_visual(id: int, session: Session = Depends(get_session)):
+    return crud.delete_saved_visual(id=id, session=session)
+
+
+@router.get("/saved_visual/{id}")
+def get_saved_visual_by_id(id: int, session: Session = Depends(get_session)):
+    return crud.get_saved_visual_by_id(id=id, session=session)
+
+
+@router.get("/saved_visuals")
+def get_all_saved_visuals(session: Session = Depends(get_session)):
+    return crud.get_all_saved_visuals(session=session)
+
+
+@router.get("/saved_visuals/user/{user_id}")
+def get_saved_visuals_by_user_id(user_id: int, session: Session = Depends(get_session)):
+    return crud.get_saved_visuals_by_user_id(user_id=user_id, session=session)
+
+
+@router.put("/saved_visual/{id}")
+def update_saved_visual(id: int, data: dict, session: Session = Depends(get_session)):
+    return crud.update_saved_visual(id=id, data=data, session=session)

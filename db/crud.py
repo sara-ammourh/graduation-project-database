@@ -1,5 +1,7 @@
 from datetime import date
 from typing import Optional, List, Dict, Any
+
+from sqlalchemy import update
 from sqlmodel import select, Session
 from db.config import get_session
 from db.models import User, UserAuth, UserPost, UsersSavedVisuals, LabelCorrection
@@ -144,8 +146,11 @@ def create_saved_visual (
         saved_visual: str,
         type: str,
         user_id: int,
-        session: Session = next(get_session())
-) -> UsersSavedVisuals:
+        session: Session
+) -> Optional[UsersSavedVisuals]:
+    if session.exec(select(User.saved_vis_num).where(User.user_id == user_id)).first() >= 5:
+        print("\nUser Saved Visual Slots are full")
+        return None
     new_saved_visual = UsersSavedVisuals(
         saved_visual=saved_visual,
         type=type,
@@ -154,12 +159,16 @@ def create_saved_visual (
     )
 
     session.add(new_saved_visual)
+    session.exec(update(User.saved_vis_num)
+                  .where(User.user_id == user_id)
+                  .values(saved_vis_num=User.saved_vis_num + 1)
+                  .execution_options(synchronize_sessions='fetch'))
     session.commit()
     session.refresh(new_saved_visual)
     return new_saved_visual
 
 
-def remove_saved_visual(id: int, session: Session = next(get_session())) -> bool:
+def remove_saved_visual(id: int, session: Session) -> bool:
     saved_visual = session.exec(select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)).first()
     if saved_visual:
         session.delete(saved_visual)
@@ -168,22 +177,21 @@ def remove_saved_visual(id: int, session: Session = next(get_session())) -> bool
     return False
 
 
-def get_saved_visual_by_id(id: int, session: Session = next(get_session())
+def get_saved_visual_by_id(id: int, session: Session
 ) -> Optional[UsersSavedVisuals]:
     return session.exec(select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)).first()
 
 
-def get_all_saved_visuals(session: Session = next(get_session())) -> List[UsersSavedVisuals]:
+def get_all_saved_visuals(session: Session) -> List[UsersSavedVisuals]:
     return session.exec(select(UsersSavedVisuals)).all()
 
 
-def get_saved_visuals_by_user_id(
-        user_id: int, session: Session = next(get_session())
+def get_saved_visuals_by_user_id(user_id: int, session: Session
 ) -> List[UsersSavedVisuals]:
     return session.exec(select(UsersSavedVisuals.user_id == user_id)).all()
 
 
-def update_saved_visual(id: int, data: dict, session: Session = next(get_session())
+def update_saved_visual(id: int, data: dict, session: Session
                         ) -> Optional[UsersSavedVisuals]:
     saved_visual = session.exec(select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)).first()
     if saved_visual:
