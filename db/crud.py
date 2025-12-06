@@ -212,8 +212,8 @@ def create_label_correction(
         data_structure_type: str,
         correct_label: Dict[str, Any],
         user_id: int,
-        wrong_label: Optional[Dict[str, Any]] = None,
-        session: Session = next(get_session())
+        session: Session,
+        wrong_label: Optional[Dict[str, Any]] = None
 ) -> LabelCorrection:
     new_label_correction = LabelCorrection(
         image_path=image_path,
@@ -231,7 +231,7 @@ def create_label_correction(
     return new_label_correction
 
 
-def remove_label_correction(image_path: str, session: Session = next(get_session())) -> bool:
+def remove_label_correction(image_path: str, session: Session) -> bool:
     label_correction = session.exec(
         select(LabelCorrection).where(LabelCorrection.image_path == image_path)).first()
     if label_correction:
@@ -241,17 +241,16 @@ def remove_label_correction(image_path: str, session: Session = next(get_session
     return False
 
 
-def get_label_correction_by_path(
-    image_path: str, session: Session = next(get_session())
+def get_label_correction_by_path(image_path: str, session: Session
 ) -> Optional[LabelCorrection]:
     return session.exec(
         select(LabelCorrection).where(LabelCorrection.image_path == image_path)).first()
 
 
-def get_all_label_corrections(session: Session = next(get_session())) -> List[LabelCorrection]:
+def get_all_label_corrections(session: Session) -> List[LabelCorrection]:
     return session.exec(select(LabelCorrection)).all()
 
 
 def get_label_corrections_by_user_id(
-        user_id:int, session: Session = next(get_session())) -> List[LabelCorrection]:
+        user_id:int, session: Session) -> List[LabelCorrection]:
     return session.exec(select(LabelCorrection).where(LabelCorrection.user_id == user_id)).all()

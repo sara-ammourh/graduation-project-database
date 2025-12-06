@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 from db.config import get_session
@@ -103,7 +103,7 @@ def create_saved_visual(saved_visual: str,
 
 @router.delete("/saved_visual/{id}")
 def delete_saved_visual(id: int, session: Session = Depends(get_session)):
-    return crud.delete_saved_visual(id=id, session=session)
+    return crud.remove_saved_visual(id=id, session=session)
 
 
 @router.get("/saved_visual/{id}")
@@ -124,3 +124,40 @@ def get_saved_visuals_by_user_id(user_id: int, session: Session = Depends(get_se
 @router.put("/saved_visual/{id}")
 def update_saved_visual(id: int, data: dict, session: Session = Depends(get_session)):
     return crud.update_saved_visual(id=id, data=data, session=session)
+
+
+# LabelCorrection API Route
+
+@router.post("/label_correction")
+def create_label_correction(image_path: str,
+                            data_structure_type: str,
+                            correct_label: Dict[str, Any],
+                            user_id: int,
+                            wrong_label: Dict[str, Any],
+                            session: Session = Depends(get_session)):
+    return crud.create_label_correction(image_path=image_path,
+                                        data_structure_type=data_structure_type,
+                                        correct_label=correct_label,
+                                        user_id=user_id,
+                                        wrong_label=wrong_label,
+                                        session=session)
+
+
+@router.delete("/label_correction/{image_path}")
+def delete_label_correction(image_path: str, session: Session = Depends(get_session)):
+    return crud.remove_label_correction(image_path=image_path, session=session)
+
+
+@router.get("/label_correction/{image_path}")
+def get_label_correction_by_path(image_path: str, session: Session = Depends(get_session)):
+    return crud.get_label_correction_by_path(image_path=image_path, session=session)
+
+
+@router.get("/label_corrections")
+def get_all_label_corrections(session: Session = Depends(get_session)):
+    return crud.get_all_label_corrections(session=session)
+
+
+@router.get("/label_corrections/user/{user_id}")
+def get_label_corrections_by_user_id(user_id: int, session: Session = Depends(get_session)):
+    return crud.get_label_corrections_by_user_id(user_id=user_id, session=session)
