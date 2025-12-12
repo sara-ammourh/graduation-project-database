@@ -121,7 +121,7 @@ def authenticate_user(email: str, password: str, session: Session) -> Optional[U
     if not user_auth:
         return None
 
-    if not verify_password(password, user_auth.hashed_password):
+    if not verify_password(password, user_auth.password):
         return None
 
     return user
@@ -137,10 +137,10 @@ def change_password(
     if not user_auth:
         return False
 
-    if not verify_password(old_password, user_auth.hashed_password):
+    if not verify_password(old_password, user_auth.password):
         return False
 
-    user_auth.hashed_password = hash_password(new_password)
+    user_auth.password = hash_password(new_password)
     session.add(user_auth)
     session.commit()
     return True
