@@ -11,6 +11,7 @@ from db.models import User, UserAuth, UserPost, UsersSavedVisuals, LabelCorrecti
 
 # User CRUD
 
+
 def create_user(
     session: Session,
     username: str,
@@ -71,6 +72,7 @@ def update_user(user_id: int, data: dict, session: Session) -> Optional[User]:
 
 # Authentication CRUD
 
+
 def register_user(
     session: Session,
     username: str,
@@ -97,7 +99,9 @@ def register_user(
     hashed_pwd = hash_password(password)
     user_auth = UserAuth(
         user_id=new_user.user_id,
-        hashed_password=hashed_pwd,
+        password=hashed_pwd,
+        token="",
+        token_created_at=date.today(),
     )
     session.add(user_auth)
     session.commit()
@@ -144,11 +148,9 @@ def change_password(
 
 # UserAuth CRUD
 
+
 def create_user_auth(
-        password: str,
-        token: str,
-        user_id: int,
-        session: Session
+    password: str, token: str, user_id: int, session: Session
 ) -> UserAuth:
     new_user_auth = UserAuth(
         user_id=user_id,
@@ -164,7 +166,9 @@ def create_user_auth(
 
 
 def remove_user_auth(user_id: int, session: Session = next(get_session())) -> bool:
-    user_auth = session.exec(select(UserAuth).where(UserAuth.user_id == user_id)).first()
+    user_auth = session.exec(
+        select(UserAuth).where(UserAuth.user_id == user_id)
+    ).first()
     if user_auth:
         session.delete(user_auth)
         session.commit()
@@ -178,8 +182,12 @@ def get_user_auth_by_id(
     return session.exec(select(UserAuth).where(UserAuth.user_id == user_id)).first()
 
 
-def update_user_auth(user_id: int, data: dict, session: Session = next(get_session())) -> Optional[UserAuth]:
-    user_auth = session.exec(select(UserAuth).where(UserAuth.user_id == user_id)).first()
+def update_user_auth(
+    user_id: int, data: dict, session: Session = next(get_session())
+) -> Optional[UserAuth]:
+    user_auth = session.exec(
+        select(UserAuth).where(UserAuth.user_id == user_id)
+    ).first()
     if user_auth:
         for key, value in data.items():
             setattr(user_auth, key, value)
@@ -192,11 +200,9 @@ def update_user_auth(user_id: int, data: dict, session: Session = next(get_sessi
 
 # UserPost CRUD
 
+
 def create_user_post(
-        operation_type: str,
-        status: str,
-        user_id: int,
-        session: Session
+    operation_type: str, status: str, user_id: int, session: Session
 ) -> UserPost:
     new_user_post = UserPost(
         operation_type=operation_type,
@@ -225,13 +231,14 @@ def get_all_user_posts(session: Session) -> List[UserPost]:
 
 # UsersSavedVisuals CRUD
 
-def create_saved_visual (
-        saved_visual: Dict[str, Any],
-        type: str,
-        user_id: int,
-        session: Session
+
+def create_saved_visual(
+    saved_visual: Dict[str, Any], type: str, user_id: int, session: Session
 ) -> Optional[UsersSavedVisuals]:
-    if session.exec(select(User.saved_vis_num).where(User.user_id == user_id)).first() >= 5:
+    if (
+        session.exec(select(User.saved_vis_num).where(User.user_id == user_id)).first()
+        >= 5
+    ):
         print("\nUser Saved Visual Slots are full")
         return None
     new_saved_visual = UsersSavedVisuals(
@@ -242,17 +249,21 @@ def create_saved_visual (
     )
 
     session.add(new_saved_visual)
-    session.exec(update(User.saved_vis_num)
-                  .where(User.user_id == user_id)
-                  .values(saved_vis_num=User.saved_vis_num + 1)
-                  .execution_options(synchronize_sessions='fetch'))
+    session.exec(
+        update(User.saved_vis_num)
+        .where(User.user_id == user_id)
+        .values(saved_vis_num=User.saved_vis_num + 1)
+        .execution_options(synchronize_sessions="fetch")
+    )
     session.commit()
     session.refresh(new_saved_visual)
     return new_saved_visual
 
 
 def remove_saved_visual(id: int, session: Session) -> bool:
-    saved_visual = session.exec(select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)).first()
+    saved_visual = session.exec(
+        select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)
+    ).first()
     if saved_visual:
         session.delete(saved_visual)
         session.commit()
@@ -260,27 +271,32 @@ def remove_saved_visual(id: int, session: Session) -> bool:
     return False
 
 
-def get_saved_visual_by_id(id: int, session: Session
-) -> Optional[UsersSavedVisuals]:
-    return session.exec(select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)).first()
+def get_saved_visual_by_id(id: int, session: Session) -> Optional[UsersSavedVisuals]:
+    return session.exec(
+        select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)
+    ).first()
 
 
 def get_all_saved_visuals(session: Session) -> List[UsersSavedVisuals]:
     return session.exec(select(UsersSavedVisuals)).all()
 
 
-def get_saved_visuals_by_user_id(user_id: int, session: Session
+def get_saved_visuals_by_user_id(
+    user_id: int, session: Session
 ) -> List[UsersSavedVisuals]:
     return session.exec(select(UsersSavedVisuals.user_id == user_id)).all()
 
 
-def update_saved_visual(id: int, data: dict, session: Session
-                        ) -> Optional[UsersSavedVisuals]:
-    saved_visual = session.exec(select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)).first()
+def update_saved_visual(
+    id: int, data: dict, session: Session
+) -> Optional[UsersSavedVisuals]:
+    saved_visual = session.exec(
+        select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)
+    ).first()
     if saved_visual:
         for key, value in data.items():
             setattr(saved_visual, key, value)
-        setattr(saved_visual, 'updated_at', date.today())
+        setattr(saved_visual, "updated_at", date.today())
         session.add(saved_visual)
         session.commit()
         session.refresh(saved_visual)
@@ -290,13 +306,14 @@ def update_saved_visual(id: int, data: dict, session: Session
 
 # LabelCorrection CRUD
 
+
 def create_label_correction(
-        image_path: str,
-        data_structure_type: str,
-        correct_label: Dict[str, Any],
-        user_id: int,
-        session: Session,
-        wrong_label: Optional[Dict[str, Any]] = None
+    image_path: str,
+    data_structure_type: str,
+    correct_label: Dict[str, Any],
+    user_id: int,
+    session: Session,
+    wrong_label: Optional[Dict[str, Any]] = None,
 ) -> LabelCorrection:
     new_label_correction = LabelCorrection(
         image_path=image_path,
@@ -316,7 +333,8 @@ def create_label_correction(
 
 def remove_label_correction(image_path: str, session: Session) -> bool:
     label_correction = session.exec(
-        select(LabelCorrection).where(LabelCorrection.image_path == image_path)).first()
+        select(LabelCorrection).where(LabelCorrection.image_path == image_path)
+    ).first()
     if label_correction:
         session.delete(label_correction)
         session.commit()
@@ -324,10 +342,12 @@ def remove_label_correction(image_path: str, session: Session) -> bool:
     return False
 
 
-def get_label_correction_by_path(image_path: str, session: Session
+def get_label_correction_by_path(
+    image_path: str, session: Session
 ) -> Optional[LabelCorrection]:
     return session.exec(
-        select(LabelCorrection).where(LabelCorrection.image_path == image_path)).first()
+        select(LabelCorrection).where(LabelCorrection.image_path == image_path)
+    ).first()
 
 
 def get_all_label_corrections(session: Session) -> List[LabelCorrection]:
@@ -335,5 +355,8 @@ def get_all_label_corrections(session: Session) -> List[LabelCorrection]:
 
 
 def get_label_corrections_by_user_id(
-        user_id:int, session: Session) -> List[LabelCorrection]:
-    return session.exec(select(LabelCorrection).where(LabelCorrection.user_id == user_id)).all()
+    user_id: int, session: Session
+) -> List[LabelCorrection]:
+    return session.exec(
+        select(LabelCorrection).where(LabelCorrection.user_id == user_id)
+    ).all()
