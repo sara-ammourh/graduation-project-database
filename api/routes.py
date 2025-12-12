@@ -1,10 +1,105 @@
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends
+from datetime import timedelta
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 from db.config import get_session
 from db import crud
+from schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    PasswordChangeRequest,
+)
+from auth.utils import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter()
+
+
+# Authentication Routes
+
+
+@router.post("/auth/register", response_model=TokenResponse)
+def register(request: RegisterRequest, session: Session = Depends(get_session)):
+    """Register a new user."""
+    user = crud.register_user(
+        session=session,
+        username=request.username,
+        email=request.email,
+        password=request.password,
+        preferred_theme=request.preferred_theme,
+        phone_number=request.phone_number,
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already exists or registration failed",
+        )
+
+    # Create access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.user_id}, expires_delta=access_token_expires
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        user_id=user.user_id,
+        username=user.username,
+        email=user.email,
+    )
+
+
+@router.post("/auth/login", response_model=TokenResponse)
+def login(request: LoginRequest, session: Session = Depends(get_session)):
+    """Login user with email and password."""
+    user = crud.authenticate_user(
+        email=request.email, password=request.password, session=session
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.user_id}, expires_delta=access_token_expires
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        user_id=user.user_id,
+        username=user.username,
+        email=user.email,
+    )
+
+
+@router.post("/auth/change-password")
+def change_password(
+    user_id: int,
+    request: PasswordChangeRequest,
+    session: Session = Depends(get_session),
+):
+    """Change user password."""
+    success = crud.change_password(
+        user_id=user_id,
+        old_password=request.current_password,
+        new_password=request.new_password,
+        session=session,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid current password or user not found",
+        )
+
+    return {"message": "Password changed successfully"}
+
 
 # User API Route
 

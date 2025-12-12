@@ -3,6 +3,8 @@ from typing import Optional, List, Dict, Any
 
 from sqlalchemy import update
 from sqlmodel import select, Session
+
+from auth.utils import hash_password, verify_password
 from db.config import get_session
 from db.models import User, UserAuth, UserPost, UsersSavedVisuals, LabelCorrection
 
@@ -43,6 +45,14 @@ def get_user_by_id(user_id: int, session: Session) -> Optional[User]:
     return session.exec(select(User).where(User.user_id == user_id)).first()
 
 
+def get_user_by_email(email: str, session: Session) -> Optional[User]:
+    return session.exec(select(User).where(User.email == email)).first()
+
+
+def get_user_by_username(username: str, session: Session) -> Optional[User]:
+    return session.exec(select(User).where(User.username == username)).first()
+
+
 def get_all_users(session: Session) -> List[User]:
     return session.exec(select(User)).all()
 
@@ -57,6 +67,79 @@ def update_user(user_id: int, data: dict, session: Session) -> Optional[User]:
         session.refresh(user)
         return user
     return None
+
+
+# Authentication CRUD
+
+def register_user(
+    session: Session,
+    username: str,
+    email: str,
+    password: str,
+    preferred_theme: str = "light",
+    phone_number: Optional[str] = None,
+) -> Optional[User]:
+    """Register a new user with authentication."""
+    # Check if user already exists
+    if get_user_by_email(email, session) or get_user_by_username(username, session):
+        return None
+
+    # Create user
+    new_user = create_user(
+        session=session,
+        username=username,
+        email=email,
+        preferred_theme=preferred_theme,
+        phone_number=phone_number,
+    )
+
+    # Create auth record with hashed password
+    hashed_pwd = hash_password(password)
+    user_auth = UserAuth(
+        user_id=new_user.user_id,
+        hashed_password=hashed_pwd,
+    )
+    session.add(user_auth)
+    session.commit()
+
+    return new_user
+
+
+def authenticate_user(email: str, password: str, session: Session) -> Optional[User]:
+    """Authenticate user by email and password."""
+    user = get_user_by_email(email, session)
+    if not user:
+        return None
+
+    user_auth = session.exec(
+        select(UserAuth).where(UserAuth.user_id == user.user_id)
+    ).first()
+    if not user_auth:
+        return None
+
+    if not verify_password(password, user_auth.hashed_password):
+        return None
+
+    return user
+
+
+def change_password(
+    user_id: int, old_password: str, new_password: str, session: Session
+) -> bool:
+    """Change user password."""
+    user_auth = session.exec(
+        select(UserAuth).where(UserAuth.user_id == user_id)
+    ).first()
+    if not user_auth:
+        return False
+
+    if not verify_password(old_password, user_auth.hashed_password):
+        return False
+
+    user_auth.hashed_password = hash_password(new_password)
+    session.add(user_auth)
+    session.commit()
+    return True
 
 
 # UserAuth CRUD
