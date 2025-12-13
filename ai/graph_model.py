@@ -235,19 +235,32 @@ class GraphModel:
         x1, y1, x2, y2 = bbox
         return [(x1, y1), (x2, y1), (x1, y2), (x2, y2)]
 
-    def _connect_edges_to_nodes(self, nodes, edges):
+    def _connect_edges_to_nodes(self, nodes, edges, img_height=None):
+        if img_height is None and nodes:
+            y_positions = [n["center"][1] for n in nodes]
+            img_height = max(y_positions) * 2
+        max_dist = img_height * 0.05 if img_height else 50
+
         graph = [GraphNode(i, n["text"], n["center"], []) for i, n in enumerate(nodes)]
         for e in edges:
-            idxs = set(
-                self._find_nearest_node(c, nodes)
-                for c in self._get_edge_corners(e["bbox"])
-            )
-            if len(idxs) == 2:
-                a, b = idxs
-                if b not in graph[a].neighbors:
-                    graph[a].neighbors.append(b)
-                if a not in graph[b].neighbors:
-                    graph[b].neighbors.append(a)
+            corners = self._get_edge_corners(e["bbox"])
+            connected_nodes = []
+            for corner in corners:
+                nearest = self._find_nearest_node(corner, nodes)
+                dist = np.hypot(
+                    corner[0] - nodes[nearest]["center"][0],
+                    corner[1] - nodes[nearest]["center"][1],
+                )
+                if dist <= max_dist and nearest not in connected_nodes:
+                    connected_nodes.append(nearest)
+            if len(connected_nodes) >= 2:
+                for i in range(len(connected_nodes)):
+                    for j in range(i + 1, len(connected_nodes)):
+                        a, b = connected_nodes[i], connected_nodes[j]
+                        if b not in graph[a].neighbors:
+                            graph[a].neighbors.append(b)
+                        if a not in graph[b].neighbors:
+                            graph[b].neighbors.append(a)
         return graph
 
     def predict_image(self, img_path):
