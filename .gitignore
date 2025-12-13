@@ -3,3 +3,4 @@
 __pyache__
 *.db
 *.pyc
+.env

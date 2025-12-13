@@ -14,5 +14,10 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
     "pydantic>=2.0.0",
     "scikit-learn",
-    "pandas"
+    "pandas",
+    "ultralytics",
+    "torch",
+    "opencv-python",
+    "easyocr",
+    "pytesseract"
 ]

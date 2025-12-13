@@ -1,13 +1,13 @@
+from ast import Return
 from datetime import date
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import update
-from sqlmodel import select, Session
+from sqlmodel import Session, select
 
 from auth.utils import hash_password, verify_password
 from db.config import get_session
-from db.models import User, UserAuth, UserPost, UsersSavedVisuals, LabelCorrection
-
+from db.models import LabelCorrection, User, UserAuth, UserPost, UsersSavedVisuals
 
 # User CRUD
 
@@ -97,6 +97,9 @@ def register_user(
 
     # Create auth record with hashed password
     hashed_pwd = hash_password(password)
+    if new_user.user_id is None:
+        raise Exception("user_id can't br None")
+        
     user_auth = UserAuth(
         user_id=new_user.user_id,
         password=hashed_pwd,

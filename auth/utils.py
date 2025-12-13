@@ -1,13 +1,21 @@
-from datetime import datetime, timezone, timedelta
-from typing import Optional
-from jose import JWTError, jwt
-import bcrypt
 import os
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+import bcrypt
+from jose import JWTError, jwt
 
 # JWT Configuration
-SECRET_KEY = os.getenv(
-    "SECRET_KEY", "197b2c37c391bed93fe80344fe73b806947a65e36206e05a1a23c2fa12702fe3"
+SECRET_KEY = (
+    os.getenv(
+        "SECRET_KEY", "197b2c37c391bed93fe80344fe73b806947a65e36206e05a1a23c2fa12702fe3"
+    )
+    or ""
 )
+
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is not set")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
