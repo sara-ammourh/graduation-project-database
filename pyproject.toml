@@ -19,5 +19,4 @@ dependencies = [
     "torch",
     "opencv-python",
     "easyocr",
-    "pytesseract"
 ]

@@ -62,8 +62,10 @@ class GraphModel:
         self.seg_model = YOLO(seg_path)
         self.reader = easyocr.Reader(["en"], gpu=True)
 
-    def _seg_image(self, img_path: str, conf=0.4, iou=0.7):
-        return self.seg_model.predict(source=img_path, conf=conf, iou=iou)
+    def _seg_image(self, img_path: str, conf=0.4, iou=0.7, save=False, show=False):
+        return self.seg_model.predict(
+            source=img_path, conf=conf, iou=iou, save=save, show=show
+        )
 
     def _convert_to_grayscale(self, node):
         if node.ndim == 3:
@@ -199,15 +201,18 @@ class GraphModel:
         texts = self._read_text_strict(rgb) or self._read_text_lenient(rgb)
         return g, texts[0] if texts else ""
 
-    def _extract_nodes(self, results):
+    def _extract_nodes(self, results, min_conf=0.8):
         nodes = []
         edges = []
         for r in results:
             img = r.orig_img
             boxes = r.boxes.xyxy.cpu().numpy()
             classes = r.boxes.cls.cpu().numpy().astype(int)
+            confidences = r.boxes.conf.cpu().numpy()
             names = r.names
-            for box, cls in zip(boxes, classes):
+            for box, cls, conf in zip(boxes, classes, confidences):
+                if conf < min_conf:
+                    continue  # skip low-confidence detection
                 x1, y1, x2, y2 = map(int, box)
                 if names[cls] == "node":
                     crop = img[y1:y2, x1:x2]
@@ -263,8 +268,8 @@ class GraphModel:
                             graph[b].neighbors.append(a)
         return graph
 
-    def predict_image(self, img_path):
-        results = self._seg_image(img_path)
+    def predict_image(self, img_path, conf=0.4, iou=0.7, save=False, show=False):
+        results = self._seg_image(img_path, conf=conf, iou=iou, save=save, show=show)
         nodes, edges = self._extract_nodes(results)
         texts = [n["text"] for n in nodes]
         fixed = self._fix_confusions(texts)
