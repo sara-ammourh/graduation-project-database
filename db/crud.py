@@ -1,4 +1,3 @@
-from ast import Return
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -99,7 +98,7 @@ def register_user(
     hashed_pwd = hash_password(password)
     if new_user.user_id is None:
         raise Exception("user_id can't br None")
-        
+
     user_auth = UserAuth(
         user_id=new_user.user_id,
         password=hashed_pwd,
@@ -253,7 +252,7 @@ def create_saved_visual(
 
     session.add(new_saved_visual)
     session.exec(
-        update(User.saved_vis_num)
+        update(User)
         .where(User.user_id == user_id)
         .values(saved_vis_num=User.saved_vis_num + 1)
         .execution_options(synchronize_sessions="fetch")
@@ -268,7 +267,14 @@ def remove_saved_visual(id: int, session: Session) -> bool:
         select(UsersSavedVisuals).where(UsersSavedVisuals.id == id)
     ).first()
     if saved_visual:
+        user_id = saved_visual.user_id
         session.delete(saved_visual)
+        session.exec(
+            update(User)
+            .where(User.user_id == user_id)
+            .values(saved_vis_num=User.saved_vis_num - 1)
+            .execution_options(synchronize_sessions="fetch")
+        )
         session.commit()
         return True
     return False
@@ -287,7 +293,9 @@ def get_all_saved_visuals(session: Session) -> List[UsersSavedVisuals]:
 def get_saved_visuals_by_user_id(
     user_id: int, session: Session
 ) -> List[UsersSavedVisuals]:
-    return session.exec(select(UsersSavedVisuals.user_id == user_id)).all()
+    return session.exec(
+        select(UsersSavedVisuals).where(UsersSavedVisuals.user_id == user_id)
+    ).all()
 
 
 def update_saved_visual(
@@ -325,7 +333,6 @@ def create_label_correction(
         correct_label=correct_label,
         created_at=date.today(),
         user_id=user_id,
-        session=session,
     )
 
     session.add(new_label_correction)

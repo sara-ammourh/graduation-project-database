@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, List
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
@@ -9,6 +9,11 @@ from schemas.auth import (
     RegisterRequest,
     TokenResponse,
     PasswordChangeRequest,
+)
+from schemas.saved_visual import SavedVisualRequest, SavedVisualResponse
+from schemas.label_correction import (
+    LabelCorrectionRequest,
+    LabelCorrectionResponse,
 )
 from auth.utils import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 
@@ -190,83 +195,165 @@ def get_all_user_posts(session: Session = Depends(get_session)):
 # UsersSavedVisuals API Route
 
 
-@router.post("/saved_visual")
+@router.post("/saved_visual", response_model=SavedVisualResponse)
 def create_saved_visual(
-    saved_visual: Dict[str, Any],
-    type: str,
     user_id: int,
+    request: SavedVisualRequest,
     session: Session = Depends(get_session),
 ):
-    return crud.create_saved_visual(
-        saved_visual=saved_visual, type=type, user_id=user_id, session=session
+    """Create and save a new visualization (e.g., graph) for a user."""
+    saved_visual = crud.create_saved_visual(
+        saved_visual=request.saved_visual,
+        type=request.type,
+        user_id=user_id,
+        session=session,
     )
+
+    if not saved_visual:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not save visualization. User may have reached max saved visuals (5).",
+        )
+
+    return saved_visual
 
 
 @router.delete("/saved_visual/{id}")
 def delete_saved_visual(id: int, session: Session = Depends(get_session)):
-    return crud.remove_saved_visual(id=id, session=session)
+    """Delete a saved visualization by ID."""
+    success = crud.remove_saved_visual(id=id, session=session)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Saved visualization not found",
+        )
+
+    return {"message": "Visualization deleted successfully"}
 
 
-@router.get("/saved_visual/{id}")
+@router.get("/saved_visual/{id}", response_model=SavedVisualResponse)
 def get_saved_visual_by_id(id: int, session: Session = Depends(get_session)):
-    return crud.get_saved_visual_by_id(id=id, session=session)
+    """Get a specific saved visualization by ID."""
+    saved_visual = crud.get_saved_visual_by_id(id=id, session=session)
+
+    if not saved_visual:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Saved visualization not found",
+        )
+
+    return saved_visual
 
 
-@router.get("/saved_visuals")
+@router.get("/saved_visuals", response_model=List[SavedVisualResponse])
 def get_all_saved_visuals(session: Session = Depends(get_session)):
+    """Get all saved visualizations."""
     return crud.get_all_saved_visuals(session=session)
 
 
-@router.get("/saved_visuals/user/{user_id}")
+@router.get("/saved_visuals/user/{user_id}", response_model=List[SavedVisualResponse])
 def get_saved_visuals_by_user_id(user_id: int, session: Session = Depends(get_session)):
-    return crud.get_saved_visuals_by_user_id(user_id=user_id, session=session)
+    """Get all saved visualizations for a specific user."""
+    saved_visuals = crud.get_saved_visuals_by_user_id(user_id=user_id, session=session)
+
+    if not saved_visuals:
+        return []
+
+    return saved_visuals
 
 
-@router.put("/saved_visual/{id}")
-def update_saved_visual(id: int, data: dict, session: Session = Depends(get_session)):
-    return crud.update_saved_visual(id=id, data=data, session=session)
+@router.put("/saved_visual/{id}", response_model=SavedVisualResponse)
+def update_saved_visual(
+    id: int,
+    request: SavedVisualRequest,
+    session: Session = Depends(get_session),
+):
+    """Update an existing saved visualization."""
+    updated_visual = crud.update_saved_visual(
+        id=id,
+        data=request.dict(),
+        session=session,
+    )
+
+    if not updated_visual:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Saved visualization not found",
+        )
+
+    return updated_visual
 
 
 # LabelCorrection API Route
 
 
-@router.post("/label_correction")
+@router.post("/label_correction", response_model=LabelCorrectionResponse)
 def create_label_correction(
-    image_path: str,
-    data_structure_type: str,
-    correct_label: Dict[str, Any],
     user_id: int,
-    wrong_label: Dict[str, Any],
+    request: LabelCorrectionRequest,
     session: Session = Depends(get_session),
 ):
-    return crud.create_label_correction(
-        image_path=image_path,
-        data_structure_type=data_structure_type,
-        correct_label=correct_label,
+    """Save label corrections for a graph image."""
+    correction = crud.create_label_correction(
+        image_path=request.image_path,
+        data_structure_type=request.data_structure_type,
+        wrong_label=request.predicted_labels,
+        correct_label=request.corrections,
         user_id=user_id,
-        wrong_label=wrong_label,
         session=session,
     )
+
+    if not correction:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to save label corrections",
+        )
+
+    return correction
 
 
 @router.delete("/label_correction/{image_path}")
 def delete_label_correction(image_path: str, session: Session = Depends(get_session)):
-    return crud.remove_label_correction(image_path=image_path, session=session)
+    """Delete label corrections for an image."""
+    success = crud.remove_label_correction(image_path=image_path, session=session)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Label correction not found",
+        )
+
+    return {"message": "Label correction deleted successfully"}
 
 
-@router.get("/label_correction/{image_path}")
+@router.get("/label_correction/{image_path}", response_model=LabelCorrectionResponse)
 def get_label_correction_by_path(
     image_path: str, session: Session = Depends(get_session)
 ):
-    return crud.get_label_correction_by_path(image_path=image_path, session=session)
+    """Get label corrections for a specific image."""
+    correction = crud.get_label_correction_by_path(
+        image_path=image_path, session=session
+    )
+
+    if not correction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Label correction not found",
+        )
+
+    return correction
 
 
-@router.get("/label_corrections")
+@router.get("/label_corrections", response_model=List[LabelCorrectionResponse])
 def get_all_label_corrections(session: Session = Depends(get_session)):
+    """Get all label corrections."""
     return crud.get_all_label_corrections(session=session)
 
 
-@router.get("/label_corrections/user/{user_id}")
+@router.get(
+    "/label_corrections/user/{user_id}", response_model=List[LabelCorrectionResponse]
+)
 def get_label_corrections_by_user_id(
     user_id: int, session: Session = Depends(get_session)
 ):
