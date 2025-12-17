@@ -4,14 +4,15 @@ from typing import List, Tuple
 
 import cv2
 import easyocr
+import matplotlib.pyplot as plt
 import numpy as np
 from ultralytics import YOLO
 
 
 class CharType(Enum):
     DIGIT = ("digit", "0")
-    UPPER = ("upper", "X")
-    LOWER = ("lower", "x")
+    UPPER = ("upper", "A")
+    LOWER = ("lower", "a")
 
     def __init__(self, name, fallback):
         self._name = name
@@ -62,227 +63,201 @@ class GraphModel:
         self.seg_model = YOLO(seg_path)
         self.reader = easyocr.Reader(["en"], gpu=True)
 
-    def _seg_image(self, img_path: str, conf=0.4, iou=0.7, save=False, show=False):
-        return self.seg_model.predict(
-            source=img_path, conf=conf, iou=iou, save=save, show=show
-        )
-
-    def _convert_to_grayscale(self, node):
-        if node.ndim == 3:
-            return cv2.cvtColor(node, cv2.COLOR_BGR2GRAY)
-        return node.copy()
-
-    def _crop_borders(self, node_gray):
-        h, w = node_gray.shape
-        crop_px = min(12, h // 4, w // 4)
-        if h > 2 * crop_px and w > 2 * crop_px:
-            return node_gray[crop_px : h - crop_px, crop_px : w - crop_px]
-        return node_gray
-
-    def _apply_threshold(self, node_gray):
-        _, t = cv2.threshold(node_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        return 255 - t
-
-    def _resize_node(self, node_gray):
-        h, w = node_gray.shape
-        return cv2.resize(node_gray, (max(64, w * 2), max(64, h * 2)))
+    def _seg_image(self, img_path, conf=0.4, iou=0.7):
+        return self.seg_model.predict(img_path, conf=conf, iou=iou)
 
     def _preprocess_node(self, node):
-        node = self._convert_to_grayscale(node)
-        node = self._crop_borders(node)
-        node = self._apply_threshold(node)
-        return self._resize_node(node)
+        g = cv2.cvtColor(node, cv2.COLOR_BGR2GRAY)
+        h, w = g.shape
+        crop = min(10, h // 5, w // 5)
+        if h > 2 * crop and w > 2 * crop:
+            g = g[crop : h - crop, crop : w - crop]
+        return cv2.resize(g, (max(64, g.shape[1] * 3), max(64, g.shape[0] * 3)))
 
-    def _read_text_strict(self, img):
-        return self.reader.readtext(
-            img,
-            detail=0,
-            paragraph=False,
-            text_threshold=0.5,
-            low_text=0.3,
-            allowlist="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    def _read_text(self, img):
+        results = self.reader.readtext(
+            img, detail=1, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         )
-
-    def _read_text_lenient(self, img):
-        return self.reader.readtext(
-            img,
-            detail=0,
-            paragraph=False,
-            low_text=0.1,
-            text_threshold=0.2,
-            link_threshold=0.1,
-            mag_ratio=2.0,
-        )
-
-    def _pick_single_char(self, text: str) -> str:
-        if not text:
+        if not results:
             return ""
-        chars = [c for c in text if c.isalnum()]
-        for pred in (str.isdigit, str.isupper, str.islower):
-            for c in chars:
-                if pred(c):
-                    return c
-        return chars[0] if chars else ""
+        best = max(results, key=lambda x: x[2])
+        return best[1].strip().upper()
+
+    def _pick_single_char(self, text):
+        for c in text:
+            if c.isalnum():
+                return c
+        return ""
 
     def _determine_dominant_type(self, chars):
-        counts = {
-            CharType.DIGIT: sum(c.isdigit() for c in chars if c),
-            CharType.UPPER: sum(c.isupper() for c in chars if c),
-            CharType.LOWER: sum(c.islower() for c in chars if c),
+        scores = {
+            CharType.DIGIT: sum(c.isdigit() for c in chars),
+            CharType.UPPER: sum(c.isupper() for c in chars),
+            CharType.LOWER: sum(c.islower() for c in chars),
         }
-        return max(counts.items(), key=lambda x: x[1])[0]
+        total = sum(scores.values())
+        if total == 0:
+            return CharType.UPPER
+        if scores[CharType.UPPER] + scores[CharType.LOWER] >= total * 0.5:
+            return CharType.UPPER
+        return CharType.DIGIT
 
     def _build_char_map(self, dominant_type: CharType):
-        m = {}
-        for c in self.CONFUSIONS:
-            target = c.get_by_type(dominant_type)
-            for t in CharType:
-                if t != dominant_type:
-                    m[c.get_by_type(t)] = target
-        return m
-
-    def _force_single_char(self, text, dominant_type: CharType):
-        char_map = self._build_char_map(dominant_type)
-        c = self._pick_single_char(text)
-        if not c:
-            return dominant_type.fallback
-        c = char_map.get(c, c)
-        if dominant_type == CharType.UPPER:
-            c = c.upper()
-        elif dominant_type == CharType.LOWER:
-            c = c.lower()
-        if dominant_type == CharType.DIGIT and not c.isdigit():
-            return dominant_type.fallback
-        if dominant_type == CharType.UPPER and not c.isupper():
-            return dominant_type.fallback
-        if dominant_type == CharType.LOWER and not c.islower():
-            return dominant_type.fallback
-        return c
+        char_map = {}
+        for conf in self.CONFUSIONS:
+            target = conf.get_by_type(dominant_type)
+            for char_type in CharType:
+                if char_type != dominant_type:
+                    char_map[conf.get_by_type(char_type)] = target
+        return char_map
 
     def _fix_confusions(self, texts):
-        single_chars = [self._pick_single_char(t) for t in texts]
-
-        result = []
-        for c in single_chars:
-            result.append(c if c else None)
-
-        valid = [c for c in result if c]
+        chars = [self._pick_single_char(t) for t in texts]
+        valid = [c for c in chars if c]
         if not valid:
-            return [CharType.UPPER.fallback for _ in texts]
-
+            return ["A"] * len(chars)
         dominant = self._determine_dominant_type(valid)
-
-        fixed = [
-            self._force_single_char(c, dominant) if c else dominant.fallback
-            for c in result
-        ]
-
+        char_map = self._build_char_map(dominant)
+        fixed = []
+        for c in chars:
+            if not c:
+                fixed.append(dominant.fallback)
+            else:
+                mapped = char_map.get(c, c)
+                if dominant == CharType.DIGIT:
+                    fixed.append(mapped if mapped.isdigit() else dominant.fallback)
+                elif dominant == CharType.UPPER:
+                    fixed.append(
+                        mapped.upper() if mapped.isalpha() else dominant.fallback
+                    )
+                else:
+                    fixed.append(mapped)
         used = set()
-        all_possible = list(
-            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-        )
         final = []
+        all_chars = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
         for c in fixed:
             if c not in used:
                 final.append(c)
                 used.add(c)
             else:
-                # pick next unused char
-                for a in all_possible:
+                for a in all_chars:
                     if a not in used:
                         final.append(a)
                         used.add(a)
                         break
+                else:
+                    final.append(c)
         return final
 
-    def _predict_node(self, node):
-        g = self._preprocess_node(node)
-        rgb = cv2.cvtColor(g, cv2.COLOR_GRAY2RGB)
-        texts = self._read_text_strict(rgb) or self._read_text_lenient(rgb)
-        return g, texts[0] if texts else ""
+    def _distance_to_mask(self, point, mask):
+        mask = np.squeeze(mask)
+        ys, xs = np.where(mask > 0)
+        if len(xs) == 0:
+            return float("inf")
+        dists = np.hypot(xs - point[0], ys - point[1])
+        return np.min(dists)
 
-    def _extract_nodes(self, results, min_conf=0.8):
-        nodes = []
-        edges = []
+    def _connect_edges_to_nodes(self, nodes, edges, img_height=None):
+        if not nodes:
+            return []
+        if img_height is None:
+            y_positions = [n["center"][1] for n in nodes]
+            img_height = max(y_positions) * 2 if y_positions else 1000
+
+        max_dist = img_height * 0.05
+        graph = [GraphNode(i, n["text"], n["center"], []) for i, n in enumerate(nodes)]
+
+        for e in edges:
+            mask = e["mask"]
+            distances = [
+                (i, self._distance_to_mask(n["center"], mask))
+                for i, n in enumerate(nodes)
+            ]
+            distances.sort(key=lambda x: x[1])
+            if len(distances) >= 2:
+                a, b = distances[0][0], distances[1][0]
+                if distances[0][1] <= max_dist and distances[1][1] <= max_dist:
+                    if b not in graph[a].neighbors:
+                        graph[a].neighbors.append(b)
+                    if a not in graph[b].neighbors:
+                        graph[b].neighbors.append(a)
+        return graph
+
+    def display_ocr_predictions(self, img_path: str, conf=0.4, iou=0.7):
+        results = self._seg_image(img_path, conf, iou)
+        crops, raw_texts = [], []
         for r in results:
             img = r.orig_img
             boxes = r.boxes.xyxy.cpu().numpy()
             classes = r.boxes.cls.cpu().numpy().astype(int)
-            confidences = r.boxes.conf.cpu().numpy()
             names = r.names
-            for box, cls, conf in zip(boxes, classes, confidences):
-                if conf < min_conf:
-                    continue  # skip low-confidence detection
-                x1, y1, x2, y2 = map(int, box)
+            for box, cls in zip(boxes, classes):
                 if names[cls] == "node":
+                    x1, y1, x2, y2 = map(int, box)
                     crop = img[y1:y2, x1:x2]
-                    gray, text = self._predict_node(crop)
+                    g = self._preprocess_node(crop)
+                    txt = self._read_text(cv2.cvtColor(g, cv2.COLOR_GRAY2RGB))
+                    crops.append(g)
+                    raw_texts.append(txt)
+        fixed = self._fix_confusions(raw_texts)
+        if not crops:
+            print("No nodes detected.")
+            return
+        cols = 5
+        rows = (len(crops) + cols - 1) // cols
+        plt.figure(figsize=(15, 3 * rows))
+        for i, (crop, raw, fix) in enumerate(zip(crops, raw_texts, fixed)):
+            plt.subplot(rows, cols, i + 1)
+            plt.imshow(crop, cmap="gray")
+            plt.title(f"Raw: '{raw}' -> Fixed: '{fix}'", fontsize=10)
+            plt.axis("off")
+            print(f"Node {i}: Raw='{raw}' -> Fixed='{fix}'")
+        plt.tight_layout()
+        plt.show()
+
+    def predict_image(self, img_path: str, conf=0.4, iou=0.7):
+        results = self._seg_image(img_path, conf, iou)
+        nodes, edges = [], []
+        for r in results:
+            img = r.orig_img
+            boxes = r.boxes.xyxy.cpu().numpy()
+            classes = r.boxes.cls.cpu().numpy().astype(int)
+            names = r.names
+            masks = (
+                r.masks.data.cpu().numpy()
+                if hasattr(r, "masks") and r.masks is not None
+                else None
+            )
+            for idx, (box, cls) in enumerate(zip(boxes, classes)):
+                if names[cls] == "node":
+                    x1, y1, x2, y2 = map(int, box)
+                    crop = img[y1:y2, x1:x2]
+                    g = self._preprocess_node(crop)
+                    txt = self._read_text(cv2.cvtColor(g, cv2.COLOR_GRAY2RGB))
                     nodes.append(
-                        {
-                            "center": ((x1 + x2) / 2, (y1 + y2) / 2),
-                            "text": text,
-                            "gray": gray,
-                        }
+                        {"center": ((x1 + x2) / 2, (y1 + y2) / 2), "text": txt}
                     )
-                elif names[cls] == "edge":
-                    edges.append({"bbox": (x1, y1, x2, y2)})
-        return nodes, edges
-
-    def _find_nearest_node(self, point, nodes):
-        d, idx = float("inf"), -1
-        for i, n in enumerate(nodes):
-            dist = np.hypot(point[0] - n["center"][0], point[1] - n["center"][1])
-            if dist < d:
-                d, idx = dist, i
-        return idx
-
-    def _get_edge_corners(self, bbox):
-        x1, y1, x2, y2 = bbox
-        return [(x1, y1), (x2, y1), (x1, y2), (x2, y2)]
-
-    def _connect_edges_to_nodes(self, nodes, edges, img_height=None):
-        if img_height is None and nodes:
-            y_positions = [n["center"][1] for n in nodes]
-            img_height = max(y_positions) * 2
-        max_dist = img_height * 0.05 if img_height else 50
-
-        graph = [GraphNode(i, n["text"], n["center"], []) for i, n in enumerate(nodes)]
-        for e in edges:
-            corners = self._get_edge_corners(e["bbox"])
-            connected_nodes = []
-            for corner in corners:
-                nearest = self._find_nearest_node(corner, nodes)
-                dist = np.hypot(
-                    corner[0] - nodes[nearest]["center"][0],
-                    corner[1] - nodes[nearest]["center"][1],
-                )
-                if dist <= max_dist and nearest not in connected_nodes:
-                    connected_nodes.append(nearest)
-            if len(connected_nodes) >= 2:
-                for i in range(len(connected_nodes)):
-                    for j in range(i + 1, len(connected_nodes)):
-                        a, b = connected_nodes[i], connected_nodes[j]
-                        if b not in graph[a].neighbors:
-                            graph[a].neighbors.append(b)
-                        if a not in graph[b].neighbors:
-                            graph[b].neighbors.append(a)
-        return graph
-
-    def predict_image(self, img_path, conf=0.4, iou=0.7, save=False, show=False):
-        results = self._seg_image(img_path, conf=conf, iou=iou, save=save, show=show)
-        nodes, edges = self._extract_nodes(results)
+                elif names[cls] == "edge" and masks is not None:
+                    mask = masks[idx].astype(np.uint8)
+                    mask = cv2.resize(
+                        mask,
+                        (img.shape[1], img.shape[0]),
+                        interpolation=cv2.INTER_NEAREST,
+                    )
+                    edges.append({"mask": mask})
         texts = [n["text"] for n in nodes]
         fixed = self._fix_confusions(texts)
         for n, t in zip(nodes, fixed):
             n["text"] = t
         graph = self._connect_edges_to_nodes(nodes, edges)
         for n in graph:
-            print(f"Node {n.id}: {n.label} → {n.neighbors}")
+            print(f"Node {n.id}: {n.label} at {n.pos} -> {n.neighbors}")
         return graph
 
 
 if __name__ == "__main__":
-    model = GraphModel("../../models/yolov8best.pt")
+    model = GraphModel("../../models/yolov8seg.pt")
+    model.display_ocr_predictions("test2.png")
     graph = model.predict_image("test2.png")
     for n in graph:
         print(n.to_dict())
