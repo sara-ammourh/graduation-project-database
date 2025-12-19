@@ -182,7 +182,7 @@ class GraphModel:
             plt.tight_layout()
             plt.show()
 
-        graph = self._connect_edges_to_nodes(nodes, edges, img_height=img.shape[0])
+        graph = self._connect_edges_to_nodes(nodes, edges, img_height=img.shape[0]) # pyright: ignore
         for n in graph:
             print(f"Node {n.id}: {n.label} at {n.pos} -> Neighbors: {n.neighbors}")
 
