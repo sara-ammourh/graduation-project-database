@@ -10,7 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 from sklearn.cluster import DBSCAN, AgglomerativeClustering, KMeans
 
 from ai.graph_model import GraphModel
-from plogic import PExp
+from app_featuers.plogic import PExp
 from schemas.requests import (
     ClusterRequest,
     ExpressionRequest,

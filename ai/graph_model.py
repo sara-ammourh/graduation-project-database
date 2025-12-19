@@ -76,12 +76,16 @@ class GraphModel:
 
     def _read_text(self, img):
         results = self.reader.readtext(
-            img, detail=1, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+            img,
+            detail=1,
+            low_text=0.1,
+            text_threshold=0.2,
+            allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
         )
         if not results:
             return ""
-        best = max(results, key=lambda x: x[2])
-        return best[1].strip().upper()
+        best = max(results, key=lambda x: x[2])  # pyright: ignore
+        return best[1].strip().upper()  # pyright: ignore
 
     def _pick_single_char(self, text):
         for c in text:
@@ -99,7 +103,10 @@ class GraphModel:
         if total == 0:
             return CharType.UPPER
         if scores[CharType.UPPER] + scores[CharType.LOWER] >= total * 0.5:
-            return CharType.UPPER
+            if scores[CharType.UPPER] >= scores[CharType.LOWER]:
+                return CharType.UPPER
+            else:
+                return CharType.LOWER
         return CharType.DIGIT
 
     def _build_char_map(self, dominant_type: CharType):
@@ -164,7 +171,7 @@ class GraphModel:
             y_positions = [n["center"][1] for n in nodes]
             img_height = max(y_positions) * 2 if y_positions else 1000
 
-        max_dist = img_height * 0.05
+        max_dist = max(img_height * 0.1, 50)
         graph = [GraphNode(i, n["text"], n["center"], []) for i, n in enumerate(nodes)]
 
         for e in edges:
@@ -188,8 +195,8 @@ class GraphModel:
         crops, raw_texts = [], []
         for r in results:
             img = r.orig_img
-            boxes = r.boxes.xyxy.cpu().numpy()
-            classes = r.boxes.cls.cpu().numpy().astype(int)
+            boxes = r.boxes.xyxy.cpu().numpy()  # pyright: ignore
+            classes = r.boxes.cls.cpu().numpy().astype(int)  # pyright: ignore
             names = r.names
             for box, cls in zip(boxes, classes):
                 if names[cls] == "node":
@@ -220,11 +227,11 @@ class GraphModel:
         nodes, edges = [], []
         for r in results:
             img = r.orig_img
-            boxes = r.boxes.xyxy.cpu().numpy()
-            classes = r.boxes.cls.cpu().numpy().astype(int)
+            boxes = r.boxes.xyxy.cpu().numpy()  # pyright: ignore
+            classes = r.boxes.cls.cpu().numpy().astype(int)  # pyright: ignore
             names = r.names
             masks = (
-                r.masks.data.cpu().numpy()
+                r.masks.data.cpu().numpy()  # pyright: ignore
                 if hasattr(r, "masks") and r.masks is not None
                 else None
             )
