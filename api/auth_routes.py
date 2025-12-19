@@ -1,21 +1,23 @@
-from typing import Optional, List
 from datetime import timedelta
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
-from db.config import get_session
+
+from auth.utils import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
 from db import crud
+from db.config import get_session
 from schemas.auth import (
     LoginRequest,
+    PasswordChangeRequest,
     RegisterRequest,
     TokenResponse,
-    PasswordChangeRequest,
 )
-from schemas.saved_visual import SavedVisualRequest, SavedVisualResponse
 from schemas.label_correction import (
     LabelCorrectionRequest,
     LabelCorrectionResponse,
 )
-from auth.utils import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from schemas.saved_visual import SavedVisualRequest, SavedVisualResponse
 
 router = APIRouter()
 
@@ -47,6 +49,12 @@ def register(request: RegisterRequest, session: Session = Depends(get_session)):
         data={"sub": user.user_id}, expires_delta=access_token_expires
     )
 
+    if user.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID is missing",
+        )
+
     return TokenResponse(
         access_token=access_token,
         user_id=user.user_id,
@@ -74,6 +82,12 @@ def login(request: LoginRequest, session: Session = Depends(get_session)):
     access_token = create_access_token(
         data={"sub": user.user_id}, expires_delta=access_token_expires
     )
+
+    if user.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID is missing",
+        )
 
     return TokenResponse(
         access_token=access_token,
@@ -298,8 +312,8 @@ def create_label_correction(
     correction = crud.create_label_correction(
         image_path=request.image_path,
         data_structure_type=request.data_structure_type,
-        wrong_label=request.predicted_labels,
-        correct_label=request.corrections,
+        wrong_label=request.predicted_labels,  # pyright: ignore
+        correct_label=request.corrections,  # pyright: ignore
         user_id=user_id,
         session=session,
     )
