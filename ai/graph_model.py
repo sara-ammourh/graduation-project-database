@@ -3,10 +3,11 @@ from enum import Enum
 from typing import List, Tuple
 
 import cv2
-import easyocr
 import matplotlib.pyplot as plt
 import numpy as np
 from ultralytics import YOLO
+
+from .readers.reader_loader import ReaderType, load_reader
 
 
 class CharType(Enum):
@@ -59,9 +60,9 @@ class GraphModel:
         Confusion("6", "G", "g"),
     ]
 
-    def __init__(self, seg_path: str) -> None:
+    def __init__(self, seg_path: str, reader_type: ReaderType) -> None:
         self.seg_model = YOLO(seg_path)
-        self.reader = easyocr.Reader(["en"], gpu=True)
+        self.reader = load_reader(reader_type)
 
     def _seg_image(self, img_path, conf=0.4, iou=0.7):
         return self.seg_model.predict(img_path, conf=conf, iou=iou)
@@ -73,19 +74,6 @@ class GraphModel:
         if h > 2 * crop and w > 2 * crop:
             g = g[crop : h - crop, crop : w - crop]
         return cv2.resize(g, (max(64, g.shape[1] * 3), max(64, g.shape[0] * 3)))
-
-    def _read_text(self, img):
-        results = self.reader.readtext(
-            img,
-            detail=1,
-            low_text=0.1,
-            text_threshold=0.2,
-            allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-        )
-        if not results:
-            return ""
-        best = max(results, key=lambda x: x[2])  # pyright: ignore
-        return best[1].strip().upper()  # pyright: ignore
 
     def _pick_single_char(self, text):
         for c in text:
@@ -203,7 +191,7 @@ class GraphModel:
                     x1, y1, x2, y2 = map(int, box)
                     crop = img[y1:y2, x1:x2]
                     g = self._preprocess_node(crop)
-                    txt = self._read_text(cv2.cvtColor(g, cv2.COLOR_GRAY2RGB))
+                    txt = self.reader.read_char(cv2.cvtColor(g, cv2.COLOR_GRAY2RGB))
                     crops.append(g)
                     raw_texts.append(txt)
         fixed = self._fix_confusions(raw_texts)
@@ -240,7 +228,7 @@ class GraphModel:
                     x1, y1, x2, y2 = map(int, box)
                     crop = img[y1:y2, x1:x2]
                     g = self._preprocess_node(crop)
-                    txt = self._read_text(cv2.cvtColor(g, cv2.COLOR_GRAY2RGB))
+                    txt = self.reader.read_char(cv2.cvtColor(g, cv2.COLOR_GRAY2RGB))
                     nodes.append(
                         {"center": ((x1 + x2) / 2, (y1 + y2) / 2), "text": txt}
                     )
@@ -263,7 +251,7 @@ class GraphModel:
 
 
 if __name__ == "__main__":
-    model = GraphModel("../../models/yolov8seg.pt")
+    model = GraphModel("../../models/yolov8seg.pt", ReaderType.OCR)
     model.display_ocr_predictions("test2.png")
     graph = model.predict_image("test2.png")
     for n in graph:
