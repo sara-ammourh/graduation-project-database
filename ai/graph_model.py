@@ -90,7 +90,7 @@ class GraphModel:
         total = sum(scores.values())
         if total == 0:
             return CharType.UPPER
-        if scores[CharType.UPPER] + scores[CharType.LOWER] >= total * 0.5:
+        if scores[CharType.UPPER] + scores[CharType.LOWER] >= total * 0.4:
             return (
                 CharType.UPPER
                 if scores[CharType.UPPER] > scores[CharType.LOWER]
@@ -112,8 +112,16 @@ class GraphModel:
         valid = [c for c in chars if c]
         if not valid:
             return ["A"] * len(chars)
+
         dominant = self._determine_dominant_type(valid)
         char_map = self._build_char_map(dominant)
+
+        char_pool = list("abcdefghijklmnopqrstuvwxyz")
+        if dominant == CharType.DIGIT:
+            char_pool = list("0123456789")
+        elif dominant == CharType.UPPER:
+            char_pool = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
         fixed = []
         for c in chars:
             if not c:
@@ -121,31 +129,37 @@ class GraphModel:
             else:
                 mapped = char_map.get(c, c)
                 if dominant == CharType.DIGIT:
-                    fixed.append(mapped if mapped.isdigit() else dominant.fallback)
+                    if mapped.isdigit():
+                        fixed.append(mapped)
+                    else:
+                        fixed.append(dominant.fallback)
                 elif dominant == CharType.UPPER:
-                    fixed.append(
-                        mapped.upper() if mapped.isalpha() else dominant.fallback
-                    )
-                else:
-                    fixed.append(mapped)
+                    if mapped.isalpha():
+                        fixed.append(mapped.upper())
+                    else:
+                        fixed.append(dominant.fallback)
+                else:  # LOWER
+                    if mapped.isalpha():
+                        fixed.append(mapped.lower())
+                    else:
+                        fixed.append(dominant.fallback)
+
         used = set()
         final = []
-        all_chars = list(
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        )
 
         for c in fixed:
             if c not in used:
                 final.append(c)
                 used.add(c)
             else:
-                for a in all_chars:
-                    if a not in used:
-                        final.append(a)
-                        used.add(a)
+                for replacement in char_pool:
+                    if replacement not in used:
+                        final.append(replacement)
+                        used.add(replacement)
                         break
                 else:
                     final.append(c)
+
         return final
 
     def _distance_to_mask(self, point, mask):
@@ -242,6 +256,7 @@ class GraphModel:
                     crop = img[y1:y2, x1:x2]
                     g = self._preprocess_node(crop)
                     txt = self.reader.read_char(cv2.cvtColor(g, cv2.COLOR_GRAY2RGB))
+                    print(f"predicted: {txt}")
                     nodes.append(
                         {"center": ((x1 + x2) / 2, (y1 + y2) / 2), "text": txt}
                     )
