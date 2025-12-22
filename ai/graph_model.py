@@ -64,7 +64,7 @@ class GraphModel:
         self.seg_model = YOLO(seg_path)
         self.reader = load_reader(reader_type)
 
-    def _seg_image(self, img_path, conf=0.4, iou=0.7):
+    def _seg_image(self, img_path, conf=0.2, iou=0.5):
         return self.seg_model.predict(img_path, conf=conf, iou=iou)
 
     def _preprocess_node(self, node):
@@ -91,10 +91,11 @@ class GraphModel:
         if total == 0:
             return CharType.UPPER
         if scores[CharType.UPPER] + scores[CharType.LOWER] >= total * 0.5:
-            if scores[CharType.UPPER] >= scores[CharType.LOWER]:
-                return CharType.UPPER
-            else:
-                return CharType.LOWER
+            return (
+                CharType.UPPER
+                if scores[CharType.UPPER] > scores[CharType.LOWER]
+                else CharType.LOWER
+            )
         return CharType.DIGIT
 
     def _build_char_map(self, dominant_type: CharType):
@@ -129,7 +130,10 @@ class GraphModel:
                     fixed.append(mapped)
         used = set()
         final = []
-        all_chars = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        all_chars = list(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        )
+
         for c in fixed:
             if c not in used:
                 final.append(c)
@@ -159,7 +163,7 @@ class GraphModel:
             y_positions = [n["center"][1] for n in nodes]
             img_height = max(y_positions) * 2 if y_positions else 1000
 
-        max_dist = max(img_height * 0.1, 50)
+        max_dist = max(img_height * 0.2, 50)
         graph = [GraphNode(i, n["text"], n["center"], []) for i, n in enumerate(nodes)]
 
         for e in edges:
@@ -186,6 +190,7 @@ class GraphModel:
             boxes = r.boxes.xyxy.cpu().numpy()  # pyright: ignore
             classes = r.boxes.cls.cpu().numpy().astype(int)  # pyright: ignore
             names = r.names
+
             for box, cls in zip(boxes, classes):
                 if names[cls] == "node":
                     x1, y1, x2, y2 = map(int, box)
@@ -194,6 +199,7 @@ class GraphModel:
                     txt = self.reader.read_char(cv2.cvtColor(g, cv2.COLOR_GRAY2RGB))
                     crops.append(g)
                     raw_texts.append(txt)
+
         fixed = self._fix_confusions(raw_texts)
         if not crops:
             print("No nodes detected.")
@@ -201,30 +207,37 @@ class GraphModel:
         cols = 5
         rows = (len(crops) + cols - 1) // cols
         plt.figure(figsize=(15, 3 * rows))
+
         for i, (crop, raw, fix) in enumerate(zip(crops, raw_texts, fixed)):
             plt.subplot(rows, cols, i + 1)
             plt.imshow(crop, cmap="gray")
             plt.title(f"Raw: '{raw}' -> Fixed: '{fix}'", fontsize=10)
             plt.axis("off")
             print(f"Node {i}: Raw='{raw}' -> Fixed='{fix}'")
+
         plt.tight_layout()
         plt.show()
 
-    def predict_image(self, img_path: str, conf=0.4, iou=0.7):
+    def predict_image(self, img_path: str, conf=0.2, iou=0.5):
         results = self._seg_image(img_path, conf, iou)
         nodes, edges = [], []
         for r in results:
             img = r.orig_img
             boxes = r.boxes.xyxy.cpu().numpy()  # pyright: ignore
             classes = r.boxes.cls.cpu().numpy().astype(int)  # pyright: ignore
+            confs = r.boxes.conf.cpu().numpy()  # pyright: ignore
             names = r.names
             masks = (
                 r.masks.data.cpu().numpy()  # pyright: ignore
                 if hasattr(r, "masks") and r.masks is not None
                 else None
             )
-            for idx, (box, cls) in enumerate(zip(boxes, classes)):
+
+            for idx, (box, cls, score) in enumerate(zip(boxes, classes, confs)):
                 if names[cls] == "node":
+                    if score < 0.8:
+                        continue
+
                     x1, y1, x2, y2 = map(int, box)
                     crop = img[y1:y2, x1:x2]
                     g = self._preprocess_node(crop)
@@ -240,6 +253,7 @@ class GraphModel:
                         interpolation=cv2.INTER_NEAREST,
                     )
                     edges.append({"mask": mask})
+
         texts = [n["text"] for n in nodes]
         fixed = self._fix_confusions(texts)
         for n, t in zip(nodes, fixed):

@@ -2,14 +2,17 @@ import csv
 import logging
 import os
 import time
+from gzip import READ
 from threading import Lock
 
 import numpy as np
+from dotenv import load_dotenv
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from sklearn.cluster import DBSCAN, AgglomerativeClustering, KMeans
 
 from ai.graph_model import GraphModel
+from ai.readers.reader_loader import ReaderType
 from app_featuers.plogic import PExp
 from schemas.requests import (
     ClusterRequest,
@@ -18,11 +21,14 @@ from schemas.requests import (
     GraphResponse,
 )
 
+load_dotenv()
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-YOLO_MODEL_PATH = os.path.join(BASE_DIR, "models", "yolov8best.pt")
+YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH") or ""
+READER_TYPE = ReaderType.from_str(os.getenv("READER_TYPE") or "")
 GRAPH_IMAGES_DIR = os.path.join(BASE_DIR, "graph_images")
 CSV_PATH = os.path.join(BASE_DIR, "graph_timings.csv")
 
@@ -40,7 +46,7 @@ def get_graph_model():
             if graph_model is None:
                 if not os.path.exists(YOLO_MODEL_PATH):
                     raise FileNotFoundError(YOLO_MODEL_PATH)
-                graph_model = GraphModel(YOLO_MODEL_PATH)
+                graph_model = GraphModel(YOLO_MODEL_PATH, READER_TYPE)
     return graph_model
 
 

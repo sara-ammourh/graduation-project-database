@@ -3,15 +3,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
+from dotenv import load_dotenv
 from jose import JWTError, jwt
 
+load_dotenv()
+
 # JWT Configuration
-SECRET_KEY = (
-    os.getenv(
-        "SECRET_KEY", "197b2c37c391bed93fe80344fe73b806947a65e36206e05a1a23c2fa12702fe3"
-    )
-    or ""
-)
+SECRET_KEY = os.getenv("SECRET_KEY") or ""
 
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY environment variable is not set")
