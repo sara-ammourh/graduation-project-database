@@ -19,6 +19,8 @@ from schemas.requests import (
     ExpressionRequest,
     GraphNodeResponse,
     GraphResponse,
+    IsEquivalentRequest,
+    WhereRequest,
 )
 
 load_dotenv()
@@ -96,6 +98,35 @@ async def evaluate(inp: ExpressionRequest):
         "headers": exp.df.columns.to_list(),
         "data": exp.df.values.tolist(),
     }
+
+
+@router.post("/is_equivalent")
+async def is_equivalent(inp: IsEquivalentRequest):
+    try:
+        exp1 = PExp(inp.expression1).solve()
+        exp2 = PExp(inp.expression2).solve()
+        result = exp1 == exp2
+        return {
+            "equivalent": bool(result),
+            "expression1": inp.expression1,
+            "expression2": inp.expression2,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/where")
+async def where(inp: WhereRequest):
+    try:
+        exp = PExp(inp.expression).solve()
+        filtered_df = exp.where(**inp.conditions)
+        return {
+            "headers": filtered_df.columns.to_list(),
+            "data": filtered_df.values.tolist(),
+            "conditions": inp.conditions,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/cluster")

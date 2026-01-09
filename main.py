@@ -14,7 +14,7 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Graduation Project API")
+app = FastAPI(title="GoAlgo API")
 
 app.add_middleware(
     CORSMiddleware,

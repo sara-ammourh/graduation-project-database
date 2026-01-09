@@ -6,6 +6,16 @@ class ExpressionRequest(BaseModel):
     expression: str
 
 
+class IsEquivalentRequest(BaseModel):
+    expression1: str
+    expression2: str
+
+
+class WhereRequest(BaseModel):
+    expression: str
+    conditions: dict
+
+
 class ClusterRequest(BaseModel):
     algorithm: str
     points: List[Tuple[float, float]]
