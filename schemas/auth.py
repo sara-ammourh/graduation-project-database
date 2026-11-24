@@ -18,9 +18,26 @@ class RegisterRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    role: str = "user"
     user_id: int
     username: str
     email: str
+    expires_at: Optional[str] = None
+
+
+class GuestTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: str = "guest"
+    guest_id: str
+    expires_at: str
+
+
+class SessionStatusResponse(BaseModel):
+    role: str
+    user_id: Optional[int] = None
+    guest_id: Optional[str] = None
+    expires_at: Optional[str] = None
 
 
 class UserResponse(BaseModel):

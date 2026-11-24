@@ -2,18 +2,19 @@ import csv
 import logging
 import os
 import time
-from gzip import READ
 from threading import Lock
+from typing import Optional
 
 import numpy as np
 from dotenv import load_dotenv
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from sklearn.cluster import DBSCAN, AgglomerativeClustering, KMeans
 
 from ai.graph_model import GraphModel
 from ai.readers.reader_loader import ReaderType
 from app_featuers.plogic import PExp
+from auth.utils import AuthPrincipal, get_current_principal
 from schemas.requests import (
     ClusterRequest,
     ExpressionRequest,
@@ -58,7 +59,7 @@ def save_file(path: str, data: bytes):
 
 
 def log_timing(
-    user_id: int,
+    owner_id: str,
     filename: str,
     save_ms: float,
     infer_ms: float,
@@ -82,7 +83,7 @@ def log_timing(
             writer.writerow(
                 [
                     round(time.time(), 3),
-                    user_id,
+                    owner_id,
                     filename,
                     round(save_ms, 2),
                     round(infer_ms, 2),
@@ -163,7 +164,11 @@ async def cluster(inp: ClusterRequest):
 
 
 @router.post("/graph/extract", response_model=GraphResponse)
-async def extract_graph(file: UploadFile = File(...), user_id: int = Query(...)):
+async def extract_graph(
+    file: UploadFile = File(...),
+    user_id: Optional[int] = Query(default=None),
+    principal: AuthPrincipal = Depends(get_current_principal),
+):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
@@ -173,10 +178,17 @@ async def extract_graph(file: UploadFile = File(...), user_id: int = Query(...))
     t_total_start = time.perf_counter()
     model = get_graph_model()
 
-    user_dir = os.path.join(GRAPH_IMAGES_DIR, str(user_id))
+    # Isolate guest uploads in a separate ephemeral directory (always cleaned up)
+    if principal.role == "user" and principal.user_id is not None:
+        owner_segment = str(principal.user_id)
+    else:
+        owner_segment = principal.guest_id or "guest_temp"
+
+    safe_filename = os.path.basename(file.filename)
+    user_dir = os.path.join(GRAPH_IMAGES_DIR, owner_segment)
     os.makedirs(user_dir, exist_ok=True)
 
-    filename = f"graph_{int(time.time())}_{file.filename}"
+    filename = f"graph_{int(time.time())}_{safe_filename}"
     path = os.path.join(user_dir, filename)
 
     t_save_start = time.perf_counter()
@@ -194,8 +206,8 @@ async def extract_graph(file: UploadFile = File(...), user_id: int = Query(...))
 
         await run_in_threadpool(
             log_timing,
-            user_id,
-            file.filename,
+            owner_segment,
+            safe_filename,
             save_ms,
             infer_ms,
             total_ms,
@@ -218,6 +230,11 @@ async def extract_graph(file: UploadFile = File(...), user_id: int = Query(...))
     finally:
         if os.path.exists(path):
             os.remove(path)
+        if principal.role == "guest" and os.path.isdir(user_dir):
+            try:
+                os.rmdir(user_dir)
+            except OSError:
+                pass
 
 
 @router.get("/graph/health")
