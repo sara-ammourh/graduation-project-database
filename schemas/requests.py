@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
 class ExpressionRequest(BaseModel):
@@ -35,3 +35,4 @@ class GraphResponse(BaseModel):
     nodes: List[GraphNodeResponse]
     node_count: int
     edge_count: int
+    image_path: Optional[str] = None

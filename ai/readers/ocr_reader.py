@@ -1,13 +1,15 @@
 from typing import Any
 
 import easyocr
+import torch
 
 from .base_reader import BaseReader
 
 
 class OCRReader(BaseReader):
     def __init__(self):
-        self.reader = easyocr.Reader(["en"], gpu=True)
+        use_gpu = torch.cuda.is_available()
+        self.reader = easyocr.Reader(["en"], gpu=use_gpu)
 
     def read_char(self, img: Any) -> str:
         results = self.reader.readtext(

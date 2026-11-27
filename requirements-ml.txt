@@ -1,0 +1,8 @@
+# Full ML inference dependencies (for local development or a dedicated
+# high-RAM inference host such as Hugging Face Spaces free tier: 16 GB RAM).
+-r requirements.txt
+ultralytics
+torch
+opencv-python-headless
+easyocr
+matplotlib

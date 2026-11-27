@@ -167,7 +167,7 @@ def create_user_auth(
     return new_user_auth
 
 
-def remove_user_auth(user_id: int, session: Session = next(get_session())) -> bool:
+def remove_user_auth(user_id: int, session: Session) -> bool:
     user_auth = session.exec(
         select(UserAuth).where(UserAuth.user_id == user_id)
     ).first()
@@ -178,14 +178,12 @@ def remove_user_auth(user_id: int, session: Session = next(get_session())) -> bo
     return False
 
 
-def get_user_auth_by_id(
-    user_id: int, session: Session = next(get_session())
-) -> Optional[UserAuth]:
+def get_user_auth_by_id(user_id: int, session: Session) -> Optional[UserAuth]:
     return session.exec(select(UserAuth).where(UserAuth.user_id == user_id)).first()
 
 
 def update_user_auth(
-    user_id: int, data: dict, session: Session = next(get_session())
+    user_id: int, data: dict, session: Session
 ) -> Optional[UserAuth]:
     user_auth = session.exec(
         select(UserAuth).where(UserAuth.user_id == user_id)

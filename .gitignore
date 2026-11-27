@@ -1,8 +1,12 @@
-.venv
-.idea
-__pyache__
+.venv/
+.idea/
+__pycache__/
+.ruff_cache/
 *.db
 *.pyc
 .env
+.env.*
+!.env.example
 graph_images/*
 *.csv
+*.log
